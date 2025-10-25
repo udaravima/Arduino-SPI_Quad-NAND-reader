@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include "spi_bang.h"
-
+#include "main.h"
 // put function declarations here:
 int myFunction(int, int);
 
@@ -18,7 +18,6 @@ void setup()
 
 void loop()
 {
-  // put your main code here, to run repeatedly:
 }
 
 void ThePageRead()
@@ -28,7 +27,7 @@ void ThePageRead()
   sendCmdSpi(0x00);
   sendCmdSpi(0x00);
   sendDummites(8);
-  for (uint8_t i = 0; i < 32; i++)
+  for (uint8_t i = 0; i < 64; i++)
   {
     Serial.print(readQSpiByte(), HEX);
   }
