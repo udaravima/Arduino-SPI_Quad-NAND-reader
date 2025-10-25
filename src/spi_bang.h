@@ -19,4 +19,3 @@ uint8_t readQSpiByte();
 uint8_t readSpiByte();
 uint8_t readDSpiByte();
 void readChipID();
-void ThePageRead();

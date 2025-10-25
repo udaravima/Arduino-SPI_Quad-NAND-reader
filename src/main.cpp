@@ -21,8 +21,16 @@ void loop()
   // put your main code here, to run repeatedly:
 }
 
-// put function definitions here:
-int myFunction(int x, int y)
+void ThePageRead()
 {
-  return x + y;
+  setCS(true);
+  sendCmdSpi(0x6B);
+  sendCmdSpi(0x00);
+  sendCmdSpi(0x00);
+  sendDummites(8);
+  for (uint8_t i = 0; i < 32; i++)
+  {
+    Serial.print(readQSpiByte(), HEX);
+  }
+  setCS(false);
 }

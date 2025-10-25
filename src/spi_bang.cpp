@@ -46,20 +46,6 @@ void readChipID()
   Serial.println(buff);
 }
 
-void ThePageRead()
-{
-  setCS(true);
-  sendCmdSpi(0x6B);
-  sendCmdSpi(0x00);
-  sendCmdSpi(0x00);
-  sendDummites(8);
-  for (uint8_t i = 0; i < 32; i++)
-  {
-    Serial.print(readQSpiByte(), HEX);
-  }
-  setCS(false);
-}
-
 // Single SPI
 void sendCmdSpi(uint8_t data)
 {
