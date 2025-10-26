@@ -32,6 +32,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+// Global buffer for data storage
+uint8_t dataBuffer[BUFFER_SIZE];
+
 void readChipID()
 {
   setCS(true);
@@ -44,6 +47,37 @@ void readChipID()
   char buff[50];
   sprintf(buff, "Chip id: 0x%x", id);
   Serial.println(buff);
+}
+
+// Read multiple bytes using Quad SPI into buffer return # bytes read
+uint16_t readQSpiBytes(uint8_t *buffer, uint16_t length)
+{
+  uint16_t bytesRead = 0;
+
+  while (bytesRead < length && bytesRead < BUFFER_SIZE)
+  {
+    buffer[bytesRead] = readQSpiByte();
+    bytesRead++;
+  }
+
+  return bytesRead;
+}
+
+// Utility function to print buffer contents in hexadecimal
+void printBufferHex(const uint8_t *buffer, uint16_t length)
+{
+  for (uint16_t i = 0; i < length; i++)
+  {
+    char buff[50];
+    if (i % 16 == 0)
+    {
+      sprintf(buff, "\n%04X: ", i);
+      Serial.print(buff);
+    }
+    sprintf(buff, "%02X ", buffer[i]);
+    Serial.print(buff);
+  }
+  Serial.println();
 }
 
 // Single SPI
