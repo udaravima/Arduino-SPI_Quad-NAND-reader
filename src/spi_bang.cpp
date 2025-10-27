@@ -49,20 +49,6 @@ void readChipID()
   Serial.println(buff);
 }
 
-// Read multiple bytes using Quad SPI into buffer return # bytes read
-uint16_t readQSpiBytes(uint8_t *buffer, uint16_t length)
-{
-  uint16_t bytesRead = 0;
-
-  while (bytesRead < length && bytesRead < BUFFER_SIZE)
-  {
-    buffer[bytesRead] = readQSpiByte();
-    bytesRead++;
-  }
-
-  return bytesRead;
-}
-
 // Utility function to print buffer contents in hexadecimal
 void printBufferHex(const uint8_t *buffer, uint16_t length)
 {
@@ -80,6 +66,49 @@ void printBufferHex(const uint8_t *buffer, uint16_t length)
   Serial.println();
 }
 
+/* 
+* Read multiple bytes into buffer return # bytes read 
+*/
+
+uint16_t readQSpiBytes(uint8_t *buffer, uint16_t length)
+{
+  uint16_t bytesRead = 0;
+
+  while (bytesRead < length && bytesRead < BUFFER_SIZE)
+  {
+    buffer[bytesRead] = readQSpiByte();
+    bytesRead++;
+  }
+
+  return bytesRead;
+}
+
+uint16_t readDSpiBytes(uint8_t *buffer, uint16_t length)
+{
+  uint16_t bytesRead = 0;
+
+  while (bytesRead < length && bytesRead < BUFFER_SIZE)
+  {
+    buffer[bytesRead] = readDSpiByte();
+    bytesRead++;
+  }
+
+  return bytesRead;
+}
+
+uint16_t readSpiBytes(uint8_t *buffer, uint16_t length)
+{
+  uint16_t bytesRead = 0;
+
+  while (bytesRead < length && bytesRead < BUFFER_SIZE)
+  {
+    buffer[bytesRead] = readSpiByte();
+    bytesRead++;
+  }
+
+  return bytesRead;
+}
+
 // Single SPI
 void sendCmdSpi(uint8_t data)
 {
@@ -88,6 +117,10 @@ void sendCmdSpi(uint8_t data)
     sendBang((data >> b) | 0x0e);
   }
 }
+
+/*
+* Read a single byte using SPI
+*/
 
 // SPI Read x1
 uint8_t readSpiByte()
@@ -130,6 +163,10 @@ void setCS(bool val)
   PORTB &= ~(1 << CLK);
   val ? PORTB &= ~(1 << CS) : PORTB |= (1 << CS);
 }
+
+/* 
+* Bit Banging Stuff 
+*/
 
 // Support up to Quad SPI or setting pins
 void sendBang(uint8_t data)
