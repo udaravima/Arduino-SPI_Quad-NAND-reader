@@ -37,15 +37,15 @@ uint8_t dataBuffer[BUFFER_SIZE];
 
 void readChipID()
 {
+  uint16_t id = 0;
   setCS(true);
   sendCmdSpi(0x9f);
   sendDummites(8);
-  uint16_t id = 0;
-  id = (id << 8) + readSpiByte();
-  id = (id << 8) + readSpiByte();
+  readSpiBytes((uint8_t *)&dataBuffer, 2);
   setCS(false);
+  id = (dataBuffer[0] << 8) | dataBuffer[1];
   char buff[50];
-  sprintf(buff, "Chip id: 0x%x", id);
+  sprintf(buff, "Chip id: 0Ix%x", id);
   Serial.println(buff);
 }
 
@@ -66,9 +66,9 @@ void printBufferHex(const uint8_t *buffer, uint16_t length)
   Serial.println();
 }
 
-/* 
-* Read multiple bytes into buffer return # bytes read 
-*/
+/*
+ * Read multiple bytes into buffer return # bytes read
+ */
 
 uint16_t readQSpiBytes(uint8_t *buffer, uint16_t length)
 {
@@ -119,8 +119,8 @@ void sendCmdSpi(uint8_t data)
 }
 
 /*
-* Read a single byte using SPI
-*/
+ * Read a single byte using SPI
+ */
 
 // SPI Read x1
 uint8_t readSpiByte()
@@ -164,9 +164,9 @@ void setCS(bool val)
   val ? PORTB &= ~(1 << CS) : PORTB |= (1 << CS);
 }
 
-/* 
-* Bit Banging Stuff 
-*/
+/*
+ * Bit Banging Stuff
+ */
 
 // Support up to Quad SPI or setting pins
 void sendBang(uint8_t data)
