@@ -10,7 +10,8 @@
 #define BDELAY 10       // microS
 #define BUFFER_SIZE 256 // Buffer size for data storage
 
-uint8_t fbang(uint8_t data);
+// Note: implementation defines fBang (capital F). Keep prototype matching
+uint8_t fBang(uint8_t data);
 void setCS(bool val);
 void sendBang(uint8_t data);
 uint8_t readBang();
