@@ -21,6 +21,7 @@ void setup()
     
     delay(1000);
     readChipID();
+    enableQuadMode();
     initInterface();
 }
 
@@ -31,15 +32,13 @@ void loop()
 
 void ThePageRead()
 {
-    setCS(true);
-    sendCmdSpi(0x6B);
-    sendCmdSpi(0x00);
-    sendCmdSpi(0x00);
-    sendDummites(8);
-    uint16_t bytesRead = readQSpiBytes(dataBuffer, 32);
+    // Load page 0 into NAND cache first
+    loadPageToCache(0);
+    
+    // Read 32 bytes from cache at column 0
+    uint16_t bytesRead = readFromCache(0, dataBuffer, 32);
     Serial.print(F("Bytes Read: "));
     Serial.println(bytesRead);
     printBufferHex(dataBuffer, 32);
     Serial.println();
-    setCS(false);
 }

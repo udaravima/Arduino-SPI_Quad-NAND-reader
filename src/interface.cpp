@@ -4,6 +4,7 @@
 #include "spi_bang.h"
 #include "sd_writer.h"
 #include <Arduino.h>
+#include <SPI.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -62,6 +63,16 @@ void serialEvent()
     }
 }
 
+// Restore bit-bang SPI after SD card hardware SPI usage
+static void restoreBitBangSPI()
+{
+    // Disable hardware SPI peripheral to release pin control
+    SPCR = 0;
+    // Reconfigure pins for bit-bang
+    DDRB |= MASK_CLK;
+    setCS(false);
+}
+
 // Copy NAND to SD card
 static void cmdCopyToSD(int argc, char *argv[])
 {
@@ -87,23 +98,25 @@ static void cmdCopyToSD(int argc, char *argv[])
     // Copy page by page
     for (uint32_t page = 0; page < totalPages; page++)
     {
-        // Read page from NAND (in chunks due to RAM limit)
         uint16_t pageSize = nandConfig.pageSize;
-        uint16_t offset = 0;
+        uint16_t colOffset = 0;
         
-        while (offset < pageSize)
+        // Load this page into NAND cache once
+        loadPageToCache(page);
+        
+        // Read from cache in chunks with increasing column offset
+        while (colOffset < pageSize)
         {
-            uint16_t chunkSize = min((uint16_t)BUFFER_SIZE, (uint16_t)(pageSize - offset));
+            uint16_t chunkSize = min((uint16_t)BUFFER_SIZE, (uint16_t)(pageSize - colOffset));
             
-            // Read chunk from NAND
-            uint16_t bytesRead = readNandPage(page, dataBuffer, chunkSize);
+            // Read chunk from NAND cache at current column offset
+            uint16_t bytesRead = readFromCache(colOffset, dataBuffer, chunkSize);
             
-            // Write to SD
+            // Write to SD (briefly uses hardware SPI)
             writeToFile(dataBuffer, bytesRead);
             
-            offset += bytesRead;
+            colOffset += bytesRead;
             
-            // Break if we read less than expected (shouldn't happen)
             if (bytesRead < chunkSize) break;
         }
         
@@ -125,6 +138,7 @@ static void cmdCopyToSD(int argc, char *argv[])
     }
     
     closeDumpFile();
+    restoreBitBangSPI();
     Serial.println(F("Copy complete!"));
 }
 
@@ -172,17 +186,16 @@ void parseAndExecuteCommand(char *command)
 
             setCS(true);
             sendCmdSpi(0x6B);
-            sendCmdSpi((address >> 16) & 0xFF);
-            sendCmdSpi((address >> 8) & 0xFF);
+            sendCmdSpi((address >> 8) & 0x0F);
             sendCmdSpi(address & 0xFF);
-            sendDummites(8);
+            sendDummies(8);
             uint16_t bytesRead = readQSpiBytes(dataBuffer, (uint16_t)size);
             printBufferHex(dataBuffer, bytesRead);
             setCS(false);
         }
         else
         {
-            Serial.println(F("Usage: readQSpiBytes <address> <size>"));
+            Serial.println(F("Usage: readQSpiBytes <colAddr> <size>"));
         }
     }
     else if (strcmp(argv[0], "pageread") == 0)
@@ -237,6 +250,7 @@ void parseAndExecuteCommand(char *command)
     else if (strcmp(argv[0], "initsd") == 0)
     {
         initSD();
+        restoreBitBangSPI();
     }
     else if (strcmp(argv[0], "copytosd") == 0)
     {

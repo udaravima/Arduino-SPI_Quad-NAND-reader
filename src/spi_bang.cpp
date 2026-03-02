@@ -104,7 +104,7 @@ uint8_t readBang()
 /*
  * Send dummy clock cycles (for read timing)
  */
-void sendDummites(uint8_t count)
+void sendDummies(uint8_t count)
 {
     // CLK as output, SIO as inputs with pull-ups
     DDRB = (DDRB & ~MASK_ALL_SIO) | MASK_CLK;
@@ -294,13 +294,80 @@ uint16_t readQSpiBytes(uint8_t *buffer, uint16_t length)
 // NAND FLASH OPERATIONS
 // =============================================================================
 
+/*
+ * Get status/feature register value
+ * regAddr: A0h=Block Lock, B0h=Config, C0h=Status, D0h=Driver Strength
+ */
+uint8_t getStatusRegister(uint8_t regAddr)
+{
+    uint8_t status;
+    
+    setCS(true);
+    sendCmdSpi(0x0F);    // Get Features command
+    sendCmdSpi(regAddr); // Register address
+    status = readSpiByte();
+    setCS(false);
+    
+    return status;
+}
+
+/*
+ * Set feature register value
+ */
+void setFeatureRegister(uint8_t regAddr, uint8_t value)
+{
+    setCS(true);
+    sendCmdSpi(0x1F);    // Set Features command
+    sendCmdSpi(regAddr); // Register address
+    sendCmdSpi(value);   // Value to write
+    setCS(false);
+}
+
+/*
+ * Wait for NAND to be ready by polling OIP bit in status register (C0h)
+ * OIP = bit 0: 1=busy, 0=ready
+ * Returns status register value when ready
+ */
+uint8_t waitForReady(void)
+{
+    uint8_t status;
+    uint16_t timeout = 10000; // Max iterations
+    
+    do {
+        status = getStatusRegister(0xC0);
+        if (!(status & 0x01)) {
+            return status;
+        }
+        delayMicroseconds(10);
+    } while (--timeout > 0);
+    
+    Serial.println(F("WARN: NAND timeout!"));
+    return status;
+}
+
+/*
+ * Enable Quad SPI mode by setting QE bit in config register (B0h)
+ * QE = bit 0 of register B0h
+ */
+void enableQuadMode(void)
+{
+    uint8_t config = getStatusRegister(0xB0);
+    if (!(config & 0x01)) {
+        config |= 0x01; // Set QE bit
+        setFeatureRegister(0xB0, config);
+        Serial.println(F("Quad mode enabled"));
+    } else {
+        Serial.println(F("Quad mode already enabled"));
+    }
+}
+
 void readChipID()
 {
     uint16_t id = 0;
     
     setCS(true);
     sendCmdSpi(0x9F);  // Read ID command
-    sendDummites(8);
+    sendDummies(8);    // 1 dummy byte (8 clocks)
     readSpiBytes((uint8_t *)&dataBuffer, 2);
     setCS(false);
     
@@ -314,6 +381,7 @@ void readChipID()
 /*
  * Load a page from NAND into its internal cache buffer
  * This is step 1 of a page read operation
+ * Polls OIP bit until operation completes
  */
 void loadPageToCache(uint32_t pageAddr)
 {
@@ -322,49 +390,63 @@ void loadPageToCache(uint32_t pageAddr)
     // Command: Page Read to Cache (13h)
     sendCmdSpi(0x13);
     
-    // Send 24-bit page address (row address)
-    sendCmdSpi((pageAddr >> 16) & 0xFF);
-    sendCmdSpi((pageAddr >> 8) & 0xFF);
-    sendCmdSpi(pageAddr & 0xFF);
+    // 24-bit row address: 8 dummy bits + 16-bit block/page address
+    sendCmdSpi((pageAddr >> 16) & 0xFF); // Dummy bits (0 for < 65536 pages)
+    sendCmdSpi((pageAddr >> 8) & 0xFF);  // Row address high
+    sendCmdSpi(pageAddr & 0xFF);         // Row address low
     
     setCS(false);
     
-    // Wait for operation to complete (tRD typically 25-100us)
-    delayMicroseconds(100);
+    // Poll OIP bit until page is loaded
+    waitForReady();
 }
 
 /*
- * Read data from NAND cache buffer using Quad SPI
- * Call loadPageToCache() first!
- * Returns number of bytes read
+ * Read data from NAND internal cache buffer at a given column offset
+ * using Fast Read Quad Output (6Bh)
+ * Must call loadPageToCache() first!
+ *
+ * Column address format (16 bits):
+ *   [15:13] = dummy bits
+ *   [12]    = plane select (0 for 1Gbit devices)
+ *   [11:0]  = 12-bit column address (0-2111)
+ *
+ * Returns number of bytes actually read
  */
-uint16_t readNandPage(uint32_t pageAddr, uint8_t *buffer, uint16_t bufSize)
+uint16_t readFromCache(uint16_t colOffset, uint8_t *buffer, uint16_t bufSize)
 {
-    uint16_t bytesRead = 0;
-    uint16_t offset = 0;
-    
-    // Step 1: Load page to cache
-    loadPageToCache(pageAddr);
-    
-    // Step 2: Read from cache using Quad I/O Read (EBh or 6Bh)
     setCS(true);
     
-    // Command: Fast Read Quad Output (6Bh)
+    // Command: Fast Read Quad Output (6Bh) - 1-1-4 schema
     sendCmdSpi(0x6B);
     
-    // Column address (2 bytes) - start at 0
-    sendCmdSpi((offset >> 8) & 0xFF);
-    sendCmdSpi(offset & 0xFF);
+    // Column address (2 bytes)
+    sendCmdSpi((colOffset >> 8) & 0x0F); // Upper nibble (plane=0, col[11:8])
+    sendCmdSpi(colOffset & 0xFF);        // col[7:0]
     
-    // Dummy cycles (8 for 6Bh command)
-    sendDummites(8);
+    // 1 dummy byte (8 clock cycles)
+    sendDummies(8);
     
     // Read data using Quad SPI
-    bytesRead = readQSpiBytes(buffer, bufSize);
+    uint16_t bytesRead = readQSpiBytes(buffer, bufSize);
     
     setCS(false);
     
     return bytesRead;
+}
+
+/*
+ * Read a full page from NAND into buffer
+ * Handles the two-step process: load page to cache, then read from cache
+ * Returns number of bytes read
+ */
+uint16_t readNandPage(uint32_t pageAddr, uint16_t colOffset, uint8_t *buffer, uint16_t bufSize)
+{
+    // Step 1: Load page to cache
+    loadPageToCache(pageAddr);
+    
+    // Step 2: Read from cache at specified column offset
+    return readFromCache(colOffset, buffer, bufSize);
 }
 
 // =============================================================================

@@ -27,24 +27,30 @@ uint16_t readQSpiBytes(uint8_t *buffer, uint16_t length);
 // Low-level bit-bang operations
 void sendBang(uint8_t data);
 uint8_t readBang(void);
-void sendDummites(uint8_t count);
+void sendDummies(uint8_t count);
 uint8_t fBang(uint8_t data);
 
 // =============================================================================
 // NAND FLASH OPERATIONS
 // =============================================================================
 
+// Feature register access
+uint8_t getStatusRegister(uint8_t regAddr);
+void setFeatureRegister(uint8_t regAddr, uint8_t value);
+
+// Wait for NAND ready (polls OIP bit)
+uint8_t waitForReady(void);
+
+// Enable Quad SPI mode (sets QE bit in B0h)
+void enableQuadMode(void);
+
 // Chip identification
 void readChipID(void);
 
 // Page operations
-// Reads a full page from NAND into buffer
-// Returns number of bytes read
-uint16_t readNandPage(uint32_t pageAddr, uint8_t *buffer, uint16_t bufSize);
-
-// Block operations  
-// Load page into NAND internal buffer
 void loadPageToCache(uint32_t pageAddr);
+uint16_t readFromCache(uint16_t colOffset, uint8_t *buffer, uint16_t bufSize);
+uint16_t readNandPage(uint32_t pageAddr, uint16_t colOffset, uint8_t *buffer, uint16_t bufSize);
 
 // =============================================================================
 // UTILITY FUNCTIONS
