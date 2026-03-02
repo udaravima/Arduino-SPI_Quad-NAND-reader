@@ -83,16 +83,16 @@ uint8_t readBang()
     DDRB &= ~MASK_ALL_SIO;
     DDRB |= MASK_CLK;
     
-    // Sample data first (before clock pulse for SPI mode 0)
+    // Rising edge
+    PORTB |= MASK_CLK;
+    delayMicroseconds(BDELAY);
+    
+    // Sample data on the rising edge (SPI Mode 0)
     uint8_t pinVal = PINB;
     if (pinVal & MASK_SIO0) data |= 0x01;
     if (pinVal & MASK_SIO1) data |= 0x02;
     if (pinVal & MASK_SIO2) data |= 0x04;
     if (pinVal & MASK_SIO3) data |= 0x08;
-    
-    // Rising edge
-    PORTB |= MASK_CLK;
-    delayMicroseconds(BDELAY);
     
     // Falling edge
     PORTB &= ~MASK_CLK;
@@ -198,14 +198,16 @@ uint8_t readSpiByte()
     
     for (int8_t i = 7; i >= 0; i--)
     {
-        // Sample SIO1 before clock pulse
+        // Rising edge
+        PORTB |= MASK_CLK;
+        delayMicroseconds(BDELAY);
+        
+        // Sample SIO1 on the rising edge (SPI Mode 0)
         if (PINB & MASK_SIO1) {
             data |= (1 << i);
         }
         
-        // Clock pulse
-        PORTB |= MASK_CLK;
-        delayMicroseconds(BDELAY);
+        // Falling edge
         PORTB &= ~MASK_CLK;
         delayMicroseconds(BDELAY);
     }
@@ -235,6 +237,11 @@ uint8_t readDSpiByte()
     
     for (int8_t i = 3; i >= 0; i--)
     {
+        // Rising edge
+        PORTB |= MASK_CLK;
+        delayMicroseconds(BDELAY);
+        
+        // Sample SIO0 and SIO1 on the rising edge (SPI Mode 0)
         uint8_t nibble = 0;
         uint8_t pinVal = PINB;
         if (pinVal & MASK_SIO0) nibble |= 0x01;
@@ -242,8 +249,7 @@ uint8_t readDSpiByte()
         
         data |= (nibble << (i * 2));
         
-        PORTB |= MASK_CLK;
-        delayMicroseconds(BDELAY);
+        // Falling edge
         PORTB &= ~MASK_CLK;
         delayMicroseconds(BDELAY);
     }

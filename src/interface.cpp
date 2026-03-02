@@ -115,6 +115,9 @@ static void cmdCopyToSD(int argc, char *argv[])
             // Write to SD (briefly uses hardware SPI)
             writeToFile(dataBuffer, bytesRead);
             
+            // Restore bit-bang pin config after SD hardware SPI usage
+            restoreBitBangSPI();
+            
             colOffset += bytesRead;
             
             if (bytesRead < chunkSize) break;
@@ -170,11 +173,12 @@ void parseAndExecuteCommand(char *command)
     {
         readChipID();
     }
-    else if (strcmp(argv[0], "readqspibytes") == 0)
+    else if (strcmp(argv[0], "readcache") == 0)
     {
+        // Read from the currently-loaded NAND cache (must loadPageToCache first)
         if (argc == 3)
         {
-            uint32_t address = (uint32_t)strtoul(argv[1], NULL, 0);
+            uint16_t colAddr = (uint16_t)strtoul(argv[1], NULL, 0);
             int size = atoi(argv[2]);
             if (size <= 0)
             {
@@ -184,18 +188,49 @@ void parseAndExecuteCommand(char *command)
             if (size > BUFFER_SIZE)
                 size = BUFFER_SIZE;
 
-            setCS(true);
-            sendCmdSpi(0x6B);
-            sendCmdSpi((address >> 8) & 0x0F);
-            sendCmdSpi(address & 0xFF);
-            sendDummies(8);
-            uint16_t bytesRead = readQSpiBytes(dataBuffer, (uint16_t)size);
+            uint16_t bytesRead = readFromCache(colAddr, dataBuffer, (uint16_t)size);
             printBufferHex(dataBuffer, bytesRead);
-            setCS(false);
         }
         else
         {
-            Serial.println(F("Usage: readQSpiBytes <colAddr> <size>"));
+            Serial.println(F("Usage: readcache <colAddr> <size>"));
+            Serial.println(F("  (reads from currently-loaded page cache)"));
+        }
+    }
+    else if (strcmp(argv[0], "readpage") == 0)
+    {
+        // Full two-step page read: load page to cache, then read from cache
+        if (argc >= 2)
+        {
+            uint32_t pageAddr = (uint32_t)strtoul(argv[1], NULL, 0);
+            uint16_t colOffset = 0;
+            int size = BUFFER_SIZE;
+            
+            if (argc >= 3)
+                colOffset = (uint16_t)strtoul(argv[2], NULL, 0);
+            if (argc >= 4) {
+                size = atoi(argv[3]);
+                if (size <= 0) {
+                    Serial.println(F("Invalid size"));
+                    return;
+                }
+                if (size > BUFFER_SIZE)
+                    size = BUFFER_SIZE;
+            }
+            
+            uint16_t bytesRead = readNandPage(pageAddr, colOffset, dataBuffer, (uint16_t)size);
+            Serial.print(F("Page "));
+            Serial.print(pageAddr);
+            Serial.print(F(", col "));
+            Serial.print(colOffset);
+            Serial.print(F(", "));
+            Serial.print(bytesRead);
+            Serial.println(F(" bytes:"));
+            printBufferHex(dataBuffer, bytesRead);
+        }
+        else
+        {
+            Serial.println(F("Usage: readpage <page> [colOffset] [size]"));
         }
     }
     else if (strcmp(argv[0], "pageread") == 0)
@@ -265,8 +300,11 @@ void parseAndExecuteCommand(char *command)
     {
         Serial.println(F("=== NAND Commands ==="));
         Serial.println(F("  readid           - Read chip ID"));
-        Serial.println(F("  readqspibytes <addr> <size>"));
-        Serial.println(F("  pageread         - Quick page read test"));
+        Serial.println(F("  readpage <page> [col] [size]"));
+        Serial.println(F("                   - Read from NAND page"));
+        Serial.println(F("  readcache <col> <size>"));
+        Serial.println(F("                   - Read from loaded cache"));
+        Serial.println(F("  pageread         - Quick page 0 read test"));
         Serial.println(F(""));
         Serial.println(F("=== Size Config ==="));
         Serial.println(F("  setsize <MB>     - Set NAND size (128,256,512,1024)"));

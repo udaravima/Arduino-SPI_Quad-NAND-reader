@@ -28,5 +28,5 @@ uint32_t getTotalPages(void) {
 }
 
 uint32_t getTotalBytes(void) {
-    return getTotalPages() * nandConfig.pageSize;
+    return getTotalPages() * (uint32_t)nandConfig.pageSize;
 }
