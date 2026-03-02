@@ -145,6 +145,52 @@ static void cmdCopyToSD(int argc, char *argv[])
     Serial.println(F("Copy complete!"));
 }
 
+// Dump NAND raw binary data to USB (Serial)
+static void cmdDumpToUSB(int argc, char *argv[])
+{
+    uint32_t totalPages = getTotalPages();
+    uint32_t totalBytes = getTotalBytes();
+    
+    // Announce we are ready and the size expected
+    Serial.print(F("READY FOR DUMP:"));
+    Serial.println(totalBytes);
+    
+    // Wait for the host script to send the 'G' (Go) character
+    while (!Serial.available()) {
+        delay(1);
+    }
+    char go = Serial.read();
+    if (go != 'G') {
+        Serial.println(F("DUMP CANCELLED"));
+        return;
+    }
+    
+    // The host expects pure binary data now
+    for (uint32_t page = 0; page < totalPages; page++)
+    {
+        uint16_t pageSize = nandConfig.pageSize;
+        uint16_t colOffset = 0;
+        
+        loadPageToCache(page);
+        
+        while (colOffset < pageSize)
+        {
+            uint16_t chunkSize = min((uint16_t)BUFFER_SIZE, (uint16_t)(pageSize - colOffset));
+            uint16_t bytesRead = readFromCache(colOffset, dataBuffer, chunkSize);
+            
+            // Raw binary stream to host
+            Serial.write(dataBuffer, bytesRead);
+            
+            colOffset += bytesRead;
+            if (bytesRead < chunkSize) break;
+        }
+    }
+    
+    // Print completion message to signal end (though host script tracks exact bytes)
+    Serial.println();
+    Serial.println(F("DUMP COMPLETE"));
+}
+
 // Parse and execute command
 void parseAndExecuteCommand(char *command)
 {
@@ -293,6 +339,15 @@ void parseAndExecuteCommand(char *command)
     }
     
     // -------------------------------------------------------------------------
+    // USB DUMP COMMAND
+    // -------------------------------------------------------------------------
+    
+    else if (strcmp(argv[0], "dumptousb") == 0)
+    {
+        cmdDumpToUSB(argc, argv);
+    }
+    
+    // -------------------------------------------------------------------------
     // HELP
     // -------------------------------------------------------------------------
     
@@ -309,6 +364,9 @@ void parseAndExecuteCommand(char *command)
         Serial.println(F("=== Size Config ==="));
         Serial.println(F("  setsize <MB>     - Set NAND size (128,256,512,1024)"));
         Serial.println(F("  getsize          - Show current config"));
+        Serial.println(F(""));
+        Serial.println(F("=== Export ==="));
+        Serial.println(F("  dumptousb        - Raw binary dump over Serial"));
         Serial.println(F(""));
         Serial.println(F("=== SD Card ==="));
         Serial.println(F("  initsd           - Initialize SD card"));

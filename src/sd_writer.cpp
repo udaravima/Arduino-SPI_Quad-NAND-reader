@@ -17,6 +17,13 @@ bool initSD(void)
     pinMode(8, OUTPUT);  // D8 = NAND CS (PB0)
     digitalWrite(8, HIGH);
     
+    // D10 (PB2/SIO2) is the AVR hardware SPI SS pin.
+    // After bit-bang operations it's left as an input — if it floats LOW,
+    // the SPI peripheral enters slave mode and SD.begin() fails.
+    // Force it OUTPUT HIGH to ensure SPI master mode.
+    pinMode(10, OUTPUT);
+    digitalWrite(10, HIGH);
+    
     // Initialize SD card on PIN_SD_CS
     if (SD.begin(PIN_SD_CS)) {
         sdInitialized = true;
